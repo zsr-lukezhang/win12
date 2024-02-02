@@ -36,14 +36,12 @@ $('input,textarea,*[contenteditable=true]').on('contextmenu', (e) => {
 function addMenu() {
     var parentDiv = document.getElementById('desktop');
     var childDivs = parentDiv.getElementsByTagName('div');
-
-    for (var i = 0; i < childDivs.length; i++) {
+    for (let i = 0; i < childDivs.length; i++) {
         if (i <= 4) {//win12内置的5个图标不添加
             continue;
         }
-        var div = childDivs[i];
+        let div = childDivs[i];
         div.setAttribute('iconIndex', i - 5);
-        console.log(i - 5, div.getAttribute('appname'))
         div.addEventListener('contextmenu', (event) => {
             if (div.getAttribute('appname') != undefined) {
                 return showcm(event, 'desktop.icon', [div.getAttribute('appname'), div.getAttribute('iconIndex')]);
@@ -56,9 +54,15 @@ var run_cmd = '';
 let nomax = { 'calc': 0 /* 其实，计算器是可以最大化的...*/, 'notepad-fonts': 0, 'camera-notice': 0, 'winver': 0, 'run': 0, 'wsa': 0 };
 let nomin = { 'notepad-fonts': 0, 'camera-notice': 0, 'run': 0 };
 var topmost = [];
-var sys_setting = [1, 1, 1, 0, 0, 1];
+var sys_setting = [1, 1, 1, 0, 0, 1, 1];
 var use_music = true;
+var use_mic_voice = true;
 let cms = {
+    'save-bar':[
+      function (arg) {
+        return ['<i class="bi bi-window-x"></i> 移除', `removeEdgeSaveUrl('${arg}')`];
+      }
+    ],
     'titbar': [
         function (arg) {
             if (arg in nomax) {
@@ -114,7 +118,7 @@ let cms = {
         },
         function (arg) {
             if (arg[1] >= 0) {
-                return ['<i class="bi bi-trash3"></i> 删除', 'desktopItem.splice(' + (arg[1] - 1) + ', 1);saveDesktop();setIcon();addMenu();'];
+                return ['<i class="bi bi-trash3"></i> 删除', 'desktopItem.splice(' + (arg[1]) + ', 1);saveDesktop();setIcon();addMenu();'];
             } else {
                 return 'null';
             }
@@ -654,6 +658,21 @@ function closenotice() {
         $('#notice-back').removeClass('show');
     }, 200);
 }
+
+function closeVideo() {
+  var video = apps.camera.video
+  if (video) {
+    try {
+      var stream = video.srcObject;
+      var tracks = stream.getTracks();
+      tracks.forEach(function (track) {
+        track.stop();
+      });
+      video.srcObject = null;
+    } catch (error) {}
+  }
+}
+
 var shutdown_task = []; //关机任务，储存在这个数组里
 // 为什么要数组？
 // 运行的指令
@@ -2559,7 +2578,7 @@ Microsoft Windows [版本 12.0.39035.7324]
         },
         reload: () => {
             if (wifiStatus == false) {
-                $('#win-edge>iframe.show').attr('src', './disconnected' + (isDrak ? '_dark' : '') + '.html');
+                $('#win-edge>iframe.show').attr('src', './disconnected' + (isDark ? '_dark' : '') + '.html');
             }
             else {
                 $('#win-edge>iframe.show').attr('src', $('#win-edge>iframe.show').attr('src'));
@@ -2583,7 +2602,7 @@ Microsoft Windows [版本 12.0.39035.7324]
         goto: (u, clear = true) => {
             if (wifiStatus == false) {
                 m_tab.rename('edge', u);
-                $('#win-edge>iframe.show').attr('src', './disconnected' + (isDrak ? '_dark' : '') + '.html');
+                $('#win-edge>iframe.show').attr('src', './disconnected' + (isDark ? '_dark' : '') + '.html');
                 $('#win-edge>.tool>input.url').val(u);
             }
             else {
@@ -2891,7 +2910,7 @@ function widgetsMove(elt, e) {
 }
 function decodeHtml(s) {
     $('#translater').text(s);
-    return $('#translater').html().replace('\n', '<br>').replace(' ', '&nbsp;');
+    return $('#translater').html().replace(/\n/g, '<br>').replace(/ /g, '&nbsp;');
 }
 let copilot = {
     history: [],
@@ -2937,7 +2956,7 @@ let copilot = {
             $('#copilot>.inputbox').removeClass('disable');
             return;
         }
-        if (copilot.history.length > 4){
+        if (copilot.history.length > 3){ // 万年代码，千万不要改
             copilot.history.splice(2, 2);
             copilot.history.splice(2, 2);
         }
@@ -3067,10 +3086,7 @@ function openapp(name) {
     $('.window.' + name).addClass('load');
     showwin(name);
     $('#taskbar').attr('count', Number($('#taskbar').attr('count')) + 1);
-    if (name in icon)
-        $('#taskbar').append(`<a class="${name}" onclick="taskbarclick(\'${name}\')" win12_title="${$(`.window.${name}>.titbar>p`).text()}" onmouseenter="showdescp(event)" onmouseleave="hidedescp(event)" oncontextmenu="return showcm(event, 'taskbar', '${name}')"><img src="icon/${icon[name]}"></a>`);
-    else
-        $('#taskbar').append(`<a class="${name}" onclick="taskbarclick(\'${name}\')" win12_title="${$(`.window.${name}>.titbar>p`).text()}" onmouseenter="showdescp(event)" onmouseleave="hidedescp(event)"><img src="icon/${name}.svg"></a>`);
+    $('#taskbar').append(`<a class="${name}" onclick="taskbarclick(\'${name}\')" win12_title="${$(`.window.${name}>.titbar>p`).text()}" onmouseenter="showdescp(event)" onmouseleave="hidedescp(event)" oncontextmenu="return showcm(event, 'taskbar', '${name}')"><img src="icon/${icon[name] || (name + '.svg')}"></a>`);
     if ($('#taskbar').attr('count') == '1') {
         $('#taskbar').css('display', 'flex');
     }
@@ -3122,6 +3138,10 @@ function hidewin(name, arg = 'window') {
     $('.window.' + name).removeClass('notrans');
     $('.window.' + name).removeClass('max');
     $('.window.' + name).removeClass('show');
+    if (name == 'camera') {
+      // 相机关闭后统一清理 tracks
+      closeVideo()
+    }
     if (arg == 'window') {
         $('#taskbar').attr('count', Number($('#taskbar').attr('count')) - 1)
         $('#taskbar>.' + name).remove();
@@ -3155,6 +3175,9 @@ function hidewin(name, arg = 'window') {
     else {
         $('#dock-box').removeClass('hide')
     }
+}
+function removeEdgeSaveUrl(classname) {
+  $('.' + classname).remove()
 }
 function maxwin(name, trigger = true) {
     if ($('.window.' + name).hasClass('max')) {
@@ -3408,12 +3431,26 @@ function hide_widgets() {
     $('#widgets-btn').removeClass('show');
     setTimeout(() => { $('#widgets').removeClass('show-begin'); }, 200);
 }
-
+const FLY_HIDDEN_LIST_KEY = 'control_status_fly_hidden_list'
 function controlStatus(name) {
     if (this.classList.contains('active')) {
         this.classList.remove('active');
         if (name == 'wifi') {
             wifiStatus = false;
+        }
+        if (name == 'fly') {
+            flyStatus = false
+            if (localStorage.getItem(FLY_HIDDEN_LIST_KEY)) {
+              const flyHiddenData = JSON.parse(localStorage.getItem(FLY_HIDDEN_LIST_KEY))
+              const flyHiddenList = Array.isArray(flyHiddenData) ? flyHiddenData : []
+              flyHiddenList.forEach(item => {
+                const dom = $(`#control .${item} .icon`)
+                if (!dom.hasClass('active')) {
+                  dom.addClass('active')
+                }
+              })
+              localStorage.removeItem(FLY_HIDDEN_LIST_KEY)
+            }
         }
     }
     else if (!this.classList.contains('active')) {
@@ -3421,6 +3458,22 @@ function controlStatus(name) {
         if (name == 'wifi') {
             wifiStatus = true;
         }
+        if (name == 'fly') {
+          flyStatus = true
+          const hiddenList = ['btn1', 'btn2', 'btn5']
+          const hiddenDiffList = []
+          hiddenList.forEach(item => {
+            const dom = $(`#control .${item} .icon`)
+            if (dom.hasClass('active')) {
+              dom.removeClass('active')
+              hiddenDiffList.push(item)
+            }
+          })
+          localStorage.setItem(FLY_HIDDEN_LIST_KEY, JSON.stringify(hiddenDiffList))
+        }
+    }
+    if (name == 'dark') {
+      toggletheme()
     }
 }
 // 控制面板 亮度调整
@@ -3501,6 +3554,8 @@ window.setInterval(() => {
 }, 1000);
 
 var wifiStatus = true;
+// 飞行模式
+var flyStatus = false;
 
 // 选择框
 let chstX, chstY;
@@ -3524,20 +3579,23 @@ window.addEventListener('mouseup', e => {
     $('#desktop>.choose').css('width', 0);
     $('#desktop>.choose').css('height', 0);
 })
-let isDrak = false;
+let isDark = false;
 
 // 主题
 function toggletheme() {
     $('.dock.theme').toggleClass('dk');
+    var darkControl = $(`#control .btn4 .icon`)
     $(':root').toggleClass('dark');
     if ($(':root').hasClass('dark')) {
         $('.window.whiteboard>.titbar>p').text('Blackboard');
         setData('theme', 'dark');
-        isDrak = true;
+        isDark = true;
+        darkControl.addClass('active')
     } else {
         $('.window.whiteboard>.titbar>p').text('Whiteboard');
         setData('theme', 'light');
-        isDrak = false;
+        isDark = false;
+        darkControl.removeClass('active')
     }
 }
 
@@ -3547,7 +3605,7 @@ if (isDarkTheme.matches) { //是深色
     $(':root').toggleClass('dark');
     $('.window.whiteboard>.titbar>p').text('Blackboard');
     localStorage.setItem('theme', 'dark');
-    isDrak = true;
+    isDark = true;
 } else { // 不是深色
     $('.window.whiteboard>.titbar>p').text('Whiteboard');
     localStorage.setItem('theme', 'light');
@@ -3779,15 +3837,18 @@ function setIcon() {
         if (/^(1|0)+$/.test(sys_setting_back.join(''))/* 只含有0和1 */) {
             sys_setting = sys_setting_back;
             for (var i = 0; i < sys_setting.length; i++) {
-                document.getElementById('sys_setting_' + (i + 1)).setAttribute("class", 'a checkbox' + (sys_setting[i] ? ' checked' : '')); //设置class属性
+                document.getElementById('sys_setting_' + (i + 1))?.setAttribute("class", 'a checkbox' + (sys_setting[i] ? ' checked' : '')); //设置class属性
                 if (i == 5) {
                     use_music = sys_setting[i] ? true : false;
+                }
+                if (i == 6) {
+                    use_mic_voice = sys_setting[i] ? true : false;
                 }
             }
         }
     }
     if (localStorage.getItem('root_class')) {
-        $(':root')[0].className = localStorage.getItem('root_class');
+        $(':root')[0].className = localStorage.getItem('root_class') + ' ' + (isDark ? 'dark' : '');
     }
 }
 
@@ -3855,6 +3916,7 @@ document.getElementsByTagName('body')[0].onload = function nupd() {
             }
         }
     })
+    document.querySelector('.rainbow-container-main').setAttribute('style', 'display:' + (use_mic_voice ? 'block' : 'none')+ ';');
     // loadlang();
 };
 
